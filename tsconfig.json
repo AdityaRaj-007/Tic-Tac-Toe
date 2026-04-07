@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "typeRoots": [
+      "./node_modules"
+    ],
+    "outFile": "./build/main.js",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+   "files": [
+    "./src/main.ts",
+    "./src/tic-tac-toe.ts",
+    "./src/healthcheck.ts"
+  ],
+}
