@@ -137,9 +137,15 @@ const GamePage = () => {
   const isMyTurn = gameState.currentTurn === session?.user_id;
   const didIWin = gameOver?.winner === session?.user_id;
 
-  const handlePlayAgain = () => {
-    navigate("/dashboard")
-  }
+  useEffect(() => {
+    if(gameOver) {
+        const timer = setTimeout(() => {
+            navigate("/leaderboard");
+        }, 3000); 
+        
+        return () => clearTimeout(timer); 
+    }
+  }, [gameOver, navigate]);
 
   return (
     <div className="dark:bg-gray-900 h-screen flex flex-col items-center justify-center">
@@ -199,11 +205,11 @@ const GamePage = () => {
         ))}
       </div>
 
-      {gameOver && (
+      {/* {gameOver && (
         <button className="text-2xl font-bold text-white px-4 py-2 bg-green-700 rounded-lg mt-8" onClick={handlePlayAgain}>
           Play Again
         </button>
-      )}
+      )} */}
     </div>
   );
 };

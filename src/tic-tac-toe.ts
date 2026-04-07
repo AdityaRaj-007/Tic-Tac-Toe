@@ -133,6 +133,27 @@ const matchLeave: nkruntime.MatchLeaveFunction<GameState> = (
           reason: "opponent_disconnected"
         })
       );
+
+      const sender = state.winner;
+
+
+      const winnerResult = nk.leaderboardRecordsList("match_stats_v4", [sender], 1);
+        logger.info("Winner record: %s", winnerResult);
+        let winnerStats = { win: 0, draw: 0, loss: 0 };
+        
+        if (winnerResult.ownerRecords && winnerResult.ownerRecords.length > 0 && winnerResult.ownerRecords[0].ownerId === sender && winnerResult.ownerRecords[0].metadata) {
+          logger.info("Winner stats: %s", winnerResult.ownerRecords[0].metadata);
+          const meta = winnerResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+          logger.info("Winner metadata: %s", meta);
+          winnerStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+          logger.info("Winner stats: %s", winnerStats);
+        }
+        winnerStats.win += 1;
+        const winnerNewScore = (winnerStats.win * 2) + winnerStats.draw;
+        const winnerSubScore = winnerStats.win + winnerStats.draw + winnerStats.loss;
+
+        const winnerName = state.presences[sender]?.username || "Unknown";
+        nk.leaderboardRecordWrite("match_stats_v4", sender, winnerName, winnerNewScore, winnerSubScore, winnerStats);
     }
   }
   return { state };
@@ -150,7 +171,6 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
   if (state.gameOver) return { state };
 
   for (const message of messages) {
-    // ✅ 1. Handle Client Sync Request
     if (message.opCode === OP_CODES.GET_STATE) {
       dispatcher.broadcastMessage(
         OP_CODES.GAME_STATE,
@@ -161,10 +181,9 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
         }),
         [message.sender] 
       );
-      continue; // Move to the next message
+      continue; 
     }
 
-    // ✅ 2. Handle Move Requests
     if (message.opCode === OP_CODES.MAKE_MOVE) {
       let data: any;
       try {
@@ -176,12 +195,10 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
       const { cellIndex } = data;
       const sender = message.sender.userId;
 
-      // Validation
       if (typeof cellIndex !== "number" || cellIndex < 0 || cellIndex > 8) continue;
       if (state.currentTurn !== sender) continue;
       if (state.board[cellIndex] !== "") continue;
 
-      // Apply move
       state.board[cellIndex] = state.players[sender];
 
       // Check Win
@@ -192,6 +209,56 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
           OP_CODES.GAME_OVER,
           JSON.stringify({ winner: sender, draw: false, board: state.board })
         );
+
+        logger.info("Winner: %s", sender);
+
+        // for winner update
+        const winnerResult = nk.leaderboardRecordsList("match_stats_v4", [sender], 1);
+        logger.info("Winner record: %s", winnerResult);
+        let winnerStats = { win: 0, draw: 0, loss: 0 };
+        
+        if (winnerResult.ownerRecords && winnerResult.ownerRecords.length > 0 && winnerResult.ownerRecords[0].ownerId === sender && winnerResult.ownerRecords[0].metadata) {
+          logger.info("Winner stats: %s", winnerResult.ownerRecords[0].metadata);
+          const meta = winnerResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+          logger.info("Winner metadata: %s", meta);
+          winnerStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+          logger.info("Winner stats: %s", winnerStats);
+        }
+        winnerStats.win += 1;
+        const winnerNewScore = (winnerStats.win * 2) + winnerStats.draw;
+        const winnerSubScore = winnerStats.win + winnerStats.draw + winnerStats.loss;
+
+        const winnerName = state.presences[sender]?.username || "Unknown";
+        nk.leaderboardRecordWrite("match_stats_v4", sender, winnerName, winnerNewScore, winnerSubScore, winnerStats);
+
+
+        // for looser update
+        const playerIds = Object.keys(state.players);
+        const opponentId = playerIds[0] === sender ? playerIds[1] : playerIds[0]; 
+
+        logger.info("Loser: %s", opponentId);
+
+        const loserResult = nk.leaderboardRecordsList("match_stats_v4", [opponentId], 1);
+        logger.info("Loser record: %s", loserResult);
+        let loserStats = { win: 0, draw: 0, loss: 0 };
+        
+        if (loserResult.ownerRecords && loserResult.ownerRecords.length > 0 && loserResult.ownerRecords[0].ownerId === opponentId && loserResult.ownerRecords[0].metadata) {
+          logger.info("Loser stats: %s", loserResult.ownerRecords[0].metadata);
+          const meta = loserResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+          logger.info("Loser metadata: %s", meta);
+          loserStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+          logger.info("Loser stats: %s", loserStats);
+        }
+        loserStats.loss += 1;
+        logger.info("After updating loser stats: %s", loserStats);
+        const loserNewScore = (loserStats.win * 2) + loserStats.draw;
+        const loserSubScore = loserStats.win + loserStats.draw + loserStats.loss;
+        
+        const loserName = state.presences[opponentId]?.username || "Unknown";
+        nk.leaderboardRecordWrite("match_stats_v4", opponentId, loserName, loserNewScore, loserSubScore, loserStats);
+        const loserResultAfterUpdating = nk.leaderboardRecordsList("match_stats_v4", [opponentId], 1);
+        logger.info("Loser record after updating: %s", loserResultAfterUpdating);
+
         return { state };
       }
 
@@ -202,6 +269,31 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
           OP_CODES.GAME_OVER,
           JSON.stringify({ winner: null, draw: true, board: state.board })
         );
+
+        // updating for both users
+        const playerIds = Object.keys(state.players);
+        
+        for (const playerId of playerIds) {
+          const username = state.presences[playerId].username;
+          const result = nk.leaderboardRecordsList("match_stats_v4", [playerId], 1);
+          let stats = { win: 0, draw: 0, loss: 0 };
+          
+          if (result.ownerRecords && result.ownerRecords.length > 0 && result.ownerRecords[0].ownerId === playerId && result.ownerRecords[0].metadata) {
+            const meta = result.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+            stats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+          }
+          
+          stats.draw += 1;
+
+          const newScore = stats.win*2 + stats.draw;
+          const newSubScore = stats.win + stats.draw + stats.loss;
+
+
+          nk.leaderboardRecordWrite(
+            "match_stats_v4", playerId, username, newScore, newSubScore, stats
+          );
+        }
+
         return { state };
       }
 

@@ -8,7 +8,6 @@ function rpcCreateMatch(
   return JSON.stringify({ matchId });
 }
 
-// ✅ 1. Add this Hook
 function matchmakerMatchedHook(
   ctx: nkruntime.Context,
   logger: nkruntime.Logger,
@@ -17,7 +16,6 @@ function matchmakerMatchedHook(
 ): string {
   logger.info("Matchmaker matched! Routing players to authoritative server...");
   
-  // Creates an instance of our tic-tac-toe match and forces the matchmaker to use it
   const matchId = nk.matchCreate("tic-tac-toe", {});
   return matchId; 
 }
@@ -31,8 +29,8 @@ function InitModule(
   initializer.registerRpc("create_match", rpcCreateMatch); 
   initializer.registerMatch("tic-tac-toe", ticTacToeMatchHandler);
   
-  // ✅ 2. Register the Hook
   initializer.registerMatchmakerMatched(matchmakerMatchedHook);
+  nk.leaderboardCreate("match_stats_v4",false,nkruntime.SortOrder.DESCENDING,nkruntime.Operator.SET);
 
   logger.info("Module loaded");
 }
