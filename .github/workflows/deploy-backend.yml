@@ -1,0 +1,41 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "local.yml"
+      - "package*.json"
+      - "tsconfig.json"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/tic-tac-toe
+
+            # Pull latest code
+            git pull origin main
+
+            # Build TypeScript and restart containers
+            docker compose down
+            docker compose build --no-cache
+            docker compose up -d
+
+            # Wait and verify nakama is healthy
+            sleep 15
+            docker compose ps
