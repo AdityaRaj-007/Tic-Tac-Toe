@@ -1,7 +1,7 @@
 import { Client } from "@heroiclabs/nakama-js";
 import { createContext, useContext, useState } from "react";
 
-const client = new Client("defaultkey", "127.0.0.1", "7350");
+const client = new Client(import.meta.env.VITE_NAKAMA_SERVERKEY, import.meta.env.VITE_BACKEND_IP, import.meta.env.VITE_BACKEND_PORT);
 const NakamaContext = createContext(null);
 
 const NakamaProvider = ({children}) => {
