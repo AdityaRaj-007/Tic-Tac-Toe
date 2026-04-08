@@ -118,6 +118,31 @@ const matchLeave: nkruntime.MatchLeaveFunction<GameState> = (
     delete state.players[presence.userId];
     delete state.presences[presence.userId];
 
+    const leftUserId = presence.userId;
+
+    // logger.info("Loser: %s", leftUserId);
+
+    const loserResult = nk.leaderboardRecordsList("match_stats_v4", [leftUserId], 1);
+    // logger.info("Loser record: %s", loserResult);
+    let loserStats = { win: 0, draw: 0, loss: 0 };
+    
+    if (loserResult.ownerRecords && loserResult.ownerRecords.length > 0 && loserResult.ownerRecords[0].ownerId === leftUserId && loserResult.ownerRecords[0].metadata) {
+      // logger.info("Loser stats: %s", loserResult.ownerRecords[0].metadata);
+      const meta = loserResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+      // logger.info("Loser metadata: %s", meta);
+      loserStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+      // logger.info("Loser stats: %s", loserStats);
+    }
+    loserStats.loss += 1;
+    // logger.info("After updating loser stats: %s", loserStats);
+    const loserNewScore = (loserStats.win * 2) + loserStats.draw;
+    const loserSubScore = loserStats.win + loserStats.draw + loserStats.loss;
+    
+    const loserName = state.presences[leftUserId]?.username || "Unknown";
+    nk.leaderboardRecordWrite("match_stats_v4", leftUserId, loserName, loserNewScore, loserSubScore, loserStats);
+    // const loserResultAfterUpdating = nk.leaderboardRecordsList("match_stats_v4", [leftUserId], 1);
+    // logger.info("Loser record after updating: %s", loserResultAfterUpdating);
+
     // If someone leaves mid-game, the remaining player automatically wins
     const remainingPlayerIds = Object.keys(state.players);
     if (remainingPlayerIds.length > 0) {
@@ -138,15 +163,15 @@ const matchLeave: nkruntime.MatchLeaveFunction<GameState> = (
 
 
       const winnerResult = nk.leaderboardRecordsList("match_stats_v4", [sender], 1);
-        logger.info("Winner record: %s", winnerResult);
+        // logger.info("Winner record: %s", winnerResult);
         let winnerStats = { win: 0, draw: 0, loss: 0 };
         
         if (winnerResult.ownerRecords && winnerResult.ownerRecords.length > 0 && winnerResult.ownerRecords[0].ownerId === sender && winnerResult.ownerRecords[0].metadata) {
-          logger.info("Winner stats: %s", winnerResult.ownerRecords[0].metadata);
+          // logger.info("Winner stats: %s", winnerResult.ownerRecords[0].metadata);
           const meta = winnerResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
-          logger.info("Winner metadata: %s", meta);
+          // logger.info("Winner metadata: %s", meta);
           winnerStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
-          logger.info("Winner stats: %s", winnerStats);
+          // logger.info("Winner stats: %s", winnerStats);
         }
         winnerStats.win += 1;
         const winnerNewScore = (winnerStats.win * 2) + winnerStats.draw;
