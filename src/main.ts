@@ -8,7 +8,6 @@ function rpcCreateMatch(
   return JSON.stringify({ matchId });
 }
 
-
 function matchmakerMatchedHook(
   ctx: nkruntime.Context,
   logger: nkruntime.Logger,
