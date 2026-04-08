@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNakama } from "../context/NakamaContext";
 
-const Match = ({socket}) => {
+const Match = ({socket}: {socket: any}) => {
     const {setMatchTicket, setOpponent, session, setMatchId} = useNakama()
 
     const [ticket, setTicket] = useState<string | null>(null);

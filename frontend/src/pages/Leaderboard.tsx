@@ -30,7 +30,7 @@ const LeaderboardPage = () => {
         const result = await client.listLeaderboardRecords(session, "match_stats_v4", [], 50);
 
         if (result.records) {
-          const formatted = result.records.map((record, index) => ({
+          const formatted = result.records.map((record: any, index: number) => ({
             rank: index + 1, 
             username: record.username || "Unknown Player",
             score: parseInt(record.score, 10) || 0, 
