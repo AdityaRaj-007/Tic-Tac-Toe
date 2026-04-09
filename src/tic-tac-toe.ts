@@ -88,7 +88,8 @@ const matchJoin: nkruntime.MatchJoinFunction<GameState> = (
   // Start game when 2 players join
   if (Object.keys(state.players).length === 2 && !state.currentTurn) {
     const playerIds = Object.keys(state.players);
-    state.currentTurn = playerIds[0];
+    const randomIndex = Math.floor(Math.random() * playerIds.length)
+    state.currentTurn = playerIds[randomIndex];
 
     dispatcher.broadcastMessage(
       OP_CODES.GAME_STATE,
