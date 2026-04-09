@@ -3,7 +3,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 
 
-const client = new Client(import.meta.env.VITE_NAKAMA_SERVERKEY, import.meta.env.VITE_BACKEND_IP, import.meta.env.VITE_BACKEND_PORT);
+const client = new Client(import.meta.env.VITE_NAKAMA_SERVERKEY, import.meta.env.VITE_BACKEND_IP, import.meta.env.VITE_BACKEND_PORT, import.meta.env.VITE_NAKAMA_USE_SSL === "true");
 const NakamaContext = createContext<any>(null);
 
 const NakamaProvider = ({children}: {children: ReactNode}) => {
