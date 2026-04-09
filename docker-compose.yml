@@ -22,6 +22,9 @@ services:
   nakama:
     container_name: nakama
     image: registry.heroiclabs.com/heroiclabs/nakama:3.22.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     entrypoint:
       - "/bin/sh"
       - "-ecx"
