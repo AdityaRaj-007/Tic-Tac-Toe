@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import { useNakama } from "../context/NakamaContext";
 import { useNavigate } from "react-router-dom";
 
-
 const LoginPage = () => {
   const [userName, setUserName] = useState("");
   
@@ -29,7 +28,8 @@ const LoginPage = () => {
       localStorage.setItem("user_id", session.user_id);
       localStorage.setItem("token", session.token);
 
-      const socket = client.createSocket();
+      const useSSL = import.meta.env.VITE_NAKAMA_USE_SSL === "true";
+      const socket = client.createSocket(useSSL);
       await socket.connect(session, true);
 
       console.log("Connected!", socket);
