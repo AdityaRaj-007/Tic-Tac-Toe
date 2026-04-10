@@ -61,7 +61,7 @@ const RoomBrowser = () => {
             {!loading && rooms.length === 0 && <p className="text-gray-400 italic">No active games found. Be the first to host a game!</p>}
             {!loading && rooms.length > 0 && (
                 <ul className="space-y-4">
-                    {rooms.map((room) => {
+                    {rooms.map((room: any) => {
                         let roomMode = "classic";
                         try {
                             const parsedLabel = JSON.parse(room.label);
