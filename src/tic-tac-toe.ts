@@ -1,3 +1,7 @@
+const TICK_RATE = 5;
+const TURN_TIMEOUT_SEC = 30;
+const MAX_EMPTY_SEC = 60;
+
 interface GameState {
   board: string[];
   players: { [userId: string]: string };
@@ -5,6 +9,10 @@ interface GameState {
   currentTurn: string;
   winner: string | null;
   gameOver: boolean;
+  open: boolean;
+  dealineRemaningTicks: number;
+  emptyTicks: number;
+  mode: string;
 }
 
 const WINNING_COMBINATIONS = [
@@ -18,6 +26,7 @@ const OP_CODES = {
   MAKE_MOVE: 2,
   GAME_OVER: 3,  
   GET_STATE: 4,
+  REJECTED: 5
 };
 
 const checkWin = (board: string[]): boolean => {
@@ -36,6 +45,7 @@ const matchInit: nkruntime.MatchInitFunction<GameState> = (
   nk,
   params
 ) => {
+  const mode = params && params.mode === "timed" ? "timed" : "classic";
   const state: GameState = {
     board: ["", "", "", "", "", "", "", "", ""],
     players: {},
@@ -43,12 +53,21 @@ const matchInit: nkruntime.MatchInitFunction<GameState> = (
     currentTurn: "",
     winner: null,
     gameOver: false,
+    open: true,
+    dealineRemaningTicks: 0,
+    emptyTicks: 0,
+    mode: mode
   };
+
+  const matchLabel = JSON.stringify({
+    name: "tic-tac-toe",
+    mode: mode
+  });
 
   return {
     state,
-    tickRate: 1,
-    label: "tic-tac-toe",
+    tickRate: TICK_RATE,
+    label: matchLabel,
   };
 };
 
@@ -61,7 +80,7 @@ const matchJoinAttempt: nkruntime.MatchJoinAttemptFunction<GameState> = (
   state,
   presence
 ) => {
-  if (Object.keys(state.players).length >= 2) {
+  if (!state.open || Object.keys(state.players).length >= 2) {
     return { state, accept: false, rejectMessage: "Match is full" };
   }
   return { state, accept: true };
@@ -77,6 +96,7 @@ const matchJoin: nkruntime.MatchJoinFunction<GameState> = (
   presences
 ) => {
   for (const presence of presences) {
+    state.emptyTicks = 0;
     state.presences[presence.userId] = presence;
 
     if (!state.players[presence.userId]) {
@@ -88,9 +108,13 @@ const matchJoin: nkruntime.MatchJoinFunction<GameState> = (
   // Start game when 2 players join
   if (Object.keys(state.players).length === 2 && !state.currentTurn) {
     const playerIds = Object.keys(state.players);
-    
+
     const randomIndex = Math.floor(Math.random() * playerIds.length)
     state.currentTurn = playerIds[randomIndex];
+
+    state.dealineRemaningTicks = TURN_TIMEOUT_SEC*TICK_RATE;
+
+    state.open = false;
 
     dispatcher.broadcastMessage(
       OP_CODES.GAME_STATE,
@@ -98,6 +122,8 @@ const matchJoin: nkruntime.MatchJoinFunction<GameState> = (
         currentTurn: state.currentTurn,
         board: state.board,
         players: state.players,
+        deadlineRemaining: TURN_TIMEOUT_SEC,
+        mode: state.mode
       })
     );
   }
@@ -195,7 +221,66 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
   state,
   messages
 ) => {
+  if(Object.keys(state.players).length === 0) {
+    state.emptyTicks++;
+    if(state.emptyTicks >= MAX_EMPTY_SEC*TICK_RATE) {
+      return null;
+    }
+  }
+
   if (state.gameOver) return { state };
+
+  if(state.currentTurn !== "" && state.mode === "timed") {
+    state.dealineRemaningTicks--;
+
+    if(state.dealineRemaningTicks <= 0) {
+      state.gameOver = true;
+
+      const playerIds = Object.keys(state.players);
+      const winnerId = playerIds[0] === state.currentTurn ? playerIds[1] : playerIds[0];
+      const loserId = state.currentTurn;
+
+      state.winner = winnerId;
+
+      dispatcher.broadcastMessage(
+        OP_CODES.GAME_OVER,
+        JSON.stringify({
+          winner: state.winner,
+          draw: false,
+          board: state.board,
+          reason: "timeout"
+        })
+      );
+
+      const winnerResult = nk.leaderboardRecordsList("match_stats_v4", [winnerId], 1);
+      let winnerStats = { win: 0, draw: 0, loss: 0 };
+      if (winnerResult.ownerRecords && winnerResult.ownerRecords.length > 0 && winnerResult.ownerRecords[0].metadata) {
+        const meta = winnerResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+        winnerStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+      }
+      winnerStats.win += 1;
+      const winnerNewScore = (winnerStats.win * 2) + winnerStats.draw;
+      const winnerSubScore = winnerStats.win + winnerStats.draw + winnerStats.loss;
+      const winnerName = state.presences[winnerId]?.username || "Unknown";
+      nk.leaderboardRecordWrite("match_stats_v4", winnerId, winnerName, winnerNewScore, winnerSubScore, winnerStats);
+
+      // ✅ Update Loser Stats for Timeout
+      const loserResult = nk.leaderboardRecordsList("match_stats_v4", [loserId], 1);
+      let loserStats = { win: 0, draw: 0, loss: 0 };
+      if (loserResult.ownerRecords && loserResult.ownerRecords.length > 0 && loserResult.ownerRecords[0].metadata) {
+        const meta = loserResult.ownerRecords[0].metadata as { win?: number; draw?: number; loss?: number };
+        loserStats = { win: meta.win || 0, draw: meta.draw || 0, loss: meta.loss || 0 };
+      }
+      loserStats.loss += 1;
+      const loserNewScore = (loserStats.win * 2) + loserStats.draw;
+      const loserSubScore = loserStats.win + loserStats.draw + loserStats.loss;
+      const loserName = state.presences[loserId]?.username || "Unknown";
+      nk.leaderboardRecordWrite("match_stats_v4", loserId, loserName, loserNewScore, loserSubScore, loserStats);
+
+      // ✅ CRITICAL: Stop processing messages because the game is over!
+      return { state };
+    }
+  }
 
   for (const message of messages) {
     if (message.opCode === OP_CODES.GET_STATE) {
@@ -205,6 +290,7 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
           currentTurn: state.currentTurn,
           board: state.board,
           players: state.players,
+          mode: state.mode
         }),
         [message.sender] 
       );
@@ -327,6 +413,7 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
       // Switch turn
       const playerIds = Object.keys(state.players);
       state.currentTurn = playerIds[0] === sender ? playerIds[1] : playerIds[0];
+      state.dealineRemaningTicks = TURN_TIMEOUT_SEC * TICK_RATE;
 
       dispatcher.broadcastMessage(
         OP_CODES.GAME_STATE,
@@ -334,6 +421,8 @@ const matchLoop: nkruntime.MatchLoopFunction<GameState> = (
           currentTurn: state.currentTurn,
           board: state.board,
           players: state.players,
+          deadlineRemaining: TURN_TIMEOUT_SEC,
+          mode: state.mode
         })
       );
     }

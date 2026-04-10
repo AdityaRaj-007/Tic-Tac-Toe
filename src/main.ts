@@ -4,7 +4,23 @@ function rpcCreateMatch(
   nk: nkruntime.Nakama,
   payload: string
 ): string {
-  const matchId = nk.matchCreate("tic-tac-toe", {});
+  let params = {mode: "classic"};
+
+  try {
+    let parsed = JSON.parse(payload);
+
+    if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed);
+    }
+    
+    if (parsed.mode === "timed") {
+      params.mode = "timed";
+    }
+  } catch (error) {
+    logger.error("Error parsing payload: %s", error);
+  }
+
+  const matchId = nk.matchCreate("tic-tac-toe", params);
   return JSON.stringify({ matchId });
 }
 
@@ -14,9 +30,14 @@ function matchmakerMatchedHook(
   nk: nkruntime.Nakama,
   matches: nkruntime.MatchmakerResult[]
 ): string {
+  let mode = "classic";
+
+  if (matches[0].properties && matches[0].properties["mode"]) {
+    mode = matches[0].properties["mode"];
+  }
   logger.info("Matchmaker matched! Routing players to authoritative server...");
   
-  const matchId = nk.matchCreate("tic-tac-toe", {});
+  const matchId = nk.matchCreate("tic-tac-toe", {mode: mode});
   return matchId; 
 }
 

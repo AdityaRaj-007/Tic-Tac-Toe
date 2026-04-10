@@ -24,6 +24,8 @@ const GamePage = () => {
   const [currUserName, setCurrUserName] = useState<string | null>(null);
   const [oppUserName, setOppUserName] = useState<string | null>(null);
   const [gameOver, setGameOver] = useState<GameOver | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [gameMode, setGameMode] = useState<string>("classic");
 
   const [gameState, setGameState] = useState<GameState>({
     board: ["", "", "", "", "", "", "", "", ""],
@@ -33,7 +35,7 @@ const GamePage = () => {
 
   const [mySymbol, setMySymbol] = useState<string | null>(null);
 
-  const { session, client, opponent, matchId, socket } = useNakama();
+  const { session, client, matchId, socket , setOpponent} = useNakama();
 
   const navigate = useNavigate();
 
@@ -52,6 +54,8 @@ const GamePage = () => {
         return;
       }
 
+      console.log("Payload: ", payload);
+
       switch (matchData.op_code) { 
         case OpCode.GAME_STATE:
           setGameState({
@@ -59,6 +63,10 @@ const GamePage = () => {
             currentTurn: payload.currentTurn,
             players: payload.players || {}, 
           });
+
+          if(payload.mode) setGameMode(payload.mode);
+          setTimeLeft(payload.deadlineRemaining || 30);
+
           if (session && payload.players?.[session.user_id]) {
             setMySymbol(payload.players[session.user_id]);
           }
@@ -70,6 +78,7 @@ const GamePage = () => {
             board: payload.board.map((cell: string | null) => cell ?? ""),
           }));
           setGameOver({ winner: payload.winner, draw: payload.draw });
+          setOpponent(null);
           break;
       }
     };
@@ -115,9 +124,14 @@ const GamePage = () => {
           );
         }
 
-        if (session && opponent?.presence?.user_id) {
+        const playerIds = Object.keys(gameState.players);
+        const opponentId = playerIds.find((id) => id !== session?.user_id);
+        console.log(playerIds);
+        console.log(opponentId);
+
+        if (session && opponentId) {
           const users = await client.getUsers(session, [
-            opponent.presence.user_id,
+            opponentId,
           ]);
 
           if (users.users && users.users.length > 0) {
@@ -132,7 +146,7 @@ const GamePage = () => {
     };
 
     getDisplayNames();
-  }, [client, session, opponent, matchId]);
+  }, [client, session, matchId, gameState.players]);
 
   const isMyTurn = gameState.currentTurn === session?.user_id;
   const didIWin = gameOver?.winner === session?.user_id;
@@ -146,6 +160,18 @@ const GamePage = () => {
         return () => clearTimeout(timer); 
     }
   }, [gameOver, navigate]);
+
+  useEffect(() => {
+    if(gameOver || !isMyTurn || gameMode === "classic") return;
+
+    if(timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  },[timeLeft, isMyTurn, gameOver, gameMode])
 
   return (
     <div className="dark:bg-gray-900 h-screen flex flex-col items-center justify-center">
@@ -164,13 +190,21 @@ const GamePage = () => {
 
       {/* Turn / Result */}
       {!gameOver && (
-        <p className="text-white text-lg font-semibold">
-          {Object.keys(gameState.players).length < 2 
-            ? "⏳ Waiting for opponent..." 
-            : isMyTurn 
-            ? "🟢 Your turn" 
-            : "⏳ Opponent's turn"}
-        </p>
+        <div className="flex flex-col items-center">
+          <p className="text-white text-xl font-semibold mb-2">
+           {Object.keys(gameState.players).length < 2 
+             ? "⏳ Waiting for opponent..." 
+             : isMyTurn 
+             ? "🟢 Your turn" 
+             : "⏳ Opponent's turn"}
+          </p>
+
+          {Object.keys(gameState.players).length === 2 && gameMode === "timed" && (
+            <div className={`text-2xl font-mono font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+              00:{timeLeft.toString().padStart(2, '0')}
+            </div>
+          )}
+        </div>
       )}
 
       {gameOver && (
